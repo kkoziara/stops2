@@ -49,7 +49,7 @@ def color_fun(row):
 
 def run():
     x = Stops2(trans_mat, init_pop, grid.adj_mat, range(400),
-               bound, secretion, reception, receptors, secr_amount=6, leak=0, max_con=6, max_dist=1.5, opencl=False,
+               bound, secretion, reception, receptors, secr_amount=6, leak=0, max_con=6, opencl=True,
                 asym_id=-1, div_id=-1, die_id=-1)
     for i in range(300):
         x.step()

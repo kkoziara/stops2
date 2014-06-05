@@ -10,15 +10,17 @@ def mmap(fun, mat):
 
 
 class Stops2:
-    def __init__(self, gene_mat, pop, adj_mat, env_map, bound=None, secretion=None, reception=None, receptors=None,
-                 init_env = None, secr_amount=1.0, leak=0.1, max_con = 1000.0, max_dist=None,
+    def __init__(self, gene_mat, pop, mul_mat, env_map, bound=None, secretion=None, reception=None, receptors=None,
+                 init_env = None, secr_amount=1.0, leak=0.1, max_con = 1000.0,
                  asym=None, asym_id=-3, div_id=-2, die_id=-1, opencl = False):
         """
         Init of Stops
         Parameters:
          - gene_mat - matrix of gene interactions [GENE_NUM, GENE_NUM]
          - pop - array with initial population [POP_SIZE, GENE_NUM]
-         - adj_mat - matrix with distances between each cell in population[POP_SIZE, POP_SIZE]
+         - mul_mat - matrix with adjacency graph between each environment [ENV_SIZE, ENV_SIZE], number on [i,j]
+                    is factor of interaction between environment i and j, value is float in (0,1)
+         - env_map - array mapping cells to environments
          - bound - vector of max value of each gene [GENE_NUM]
          - secretion - vector of length LIG_NUM where secretion[i] contains index
             of a gene which must be on to secrete ligand i
@@ -30,26 +32,22 @@ class Stops2:
          - secr_amount - amount of ligand secreted to the environment each time
          - leak - amount of ligand leaking from the environment each time
          - max_con - maximal ligand concentration
-         - max_dist - maximal distance between a cell and an environment needed for
-            the cell to accept ligands from the environment
-         - opencl - if set to True opencl is used to boost the speed
          - asym - array [2, GENE_NUM] specifying how to modify the both children states, children states are created
             by multiplying parent state by these vectors
          - asym_id - id of gene responsible for asymmetric division
          - div_id - id of gene responsible for division
          - die_id - id of gene responsible for death
+         - opencl - if set to True opencl is used to boost the speed
         """
         self.gene_mat = numpy.array(gene_mat).astype(numpy.float32)
         self.pop = numpy.array(pop).astype(numpy.float32)
-        self.adj_mat = numpy.array(adj_mat).astype(numpy.float32)
+        self.mul_mat = numpy.array(mul_mat).astype(numpy.float32)
         self.secr_amount = secr_amount
         self.leak = leak
         self.max_con = max_con
         self.row_size = self.gene_mat.shape[0]
         self.pop_size = self.pop.shape[0]
-        self.env_size = self.adj_mat.shape[0] #TODO double check and correct to env_size everywhere
-
-        self.max_dist = numpy.max(adj_mat) if max_dist is None else max_dist
+        self.env_size = self.mul_mat.shape[0]
 
         if bound != None:
             self.bound = numpy.array(bound).astype(numpy.float32)
@@ -111,13 +109,7 @@ class Stops2:
             self.program.init_ranlux(self.queue, (self.pop_size, 1), None,
                                      numpy.uint32(numpy.random.randint(4e10)), self.rand_state_buf)
             # prepare multiplication matrix
-            adj_mat_buf = cl.Buffer(self.ctx, self.mf.READ_ONLY | self.mf.COPY_HOST_PTR, hostbuf=self.adj_mat)
-            self.mul_mat_buf = cl.Buffer(self.ctx, self.mf.READ_WRITE, size = self.adj_mat.nbytes)
-            self.program.init_mul_mat(self.queue, (self.env_size, 1), None, self.mul_mat_buf, adj_mat_buf,
-                                   numpy.float32(self.max_dist))
-            self.mul_mat = mmap(lambda x: 1. / x if x != 0 and x <= self.max_dist else 0., adj_mat).astype(numpy.float32) #TODO:TEMP
-        else:
-            self.mul_mat = mmap(lambda x: 1. / x if x != 0 and x <= self.max_dist else 0., adj_mat).astype(numpy.float32)
+            self.mul_mat_buf = cl.Buffer(self.ctx, self.mf.READ_ONLY | self.mf.COPY_HOST_PTR, hostbuf=self.mul_mat)
 
 
     def step(self):
@@ -127,8 +119,6 @@ class Stops2:
             self._step_numpy()
 
     def __prepare_kernel(self):
-        with open("init_kernel.c") as f:
-            init_kernel = f.read()
         with open("mat_mul_kernel.c") as f:
             mat_mul_kernel = f.read()
         with open("ranlux_random.c") as f:
@@ -148,7 +138,6 @@ class Stops2:
 
         # dbg = "# pragma OPENCL EXTENSION cl_intel_printf :enable\n"
         return cl.Program(self.ctx, params +
-            init_kernel + "\n" +
             mat_mul_kernel + "\n" +
             rand_fun + "\n" +
             expr_kernel + "\n" +

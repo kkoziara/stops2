@@ -25,7 +25,7 @@ class HexGrid(object):
      - adj_mat - matrix with distances between hexagons
     """
 
-    def __init__(self, n, m, d, dfun = euclid_dist):
+    def __init__(self, n, m, d):
         """
         Init method.
         Parameters:
@@ -46,7 +46,7 @@ class HexGrid(object):
         adj_mat = numpy.zeros((grid_size, grid_size))
         for i in range(grid_size):
             for j in range(i + 1, grid_size, 1):
-                adj_mat[i, j] = dfun(ctr[i], ctr[j])
+                adj_mat[i, j] = euclid_dist(ctr[i], ctr[j]) < 1.1 * d
 
         self.xy = ctr
         self.shape = [n, m]

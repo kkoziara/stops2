@@ -9,20 +9,21 @@ from stops_ import Stops2
 secretion = numpy.array([5, 6, 7])
 reception = numpy.array([3, 4, 2])
 receptors = numpy.array([1, -1, -1])
-bound=numpy.array([1,1,1,1,1,1,1,1])
+bound=numpy.array([1,1,1,1,1,1,1,1,0])
 
-base1=numpy.array([0,0,1,0,0,0,0,0])
-base2=numpy.array([0,0,0,0,0,0,0,0])
+base1=numpy.array([0,0,1,0,0,0,0,0,0])
+base2=numpy.array([0,0,0,0,0,0,0,0,0])
 
 
-trans_mat = numpy.array([[0,-10,0,0,0,0,10,0], #notch
-                         [0,0,0,0,0,1,0,0], #Delta
-                         [0,1,0,0,0,0,0,0.1], #basal
-                         [0.005,0,0,0,0,0,0,0], #delta receptor
-                         [-10,0,0,0,0,0,0,0], #notch receptor
-                         [0,0,0,0,0,0,0,0], #ligand_delta
-                         [0,0,0,0,0,0,0,0], #ligand_notch
-                         [0,0,0,0,0,0,0,0] #ligand_basal
+trans_mat = numpy.array([[0,-10,0,0,0,0,10,0,0], #notch
+                         [0,0,0,0,0,1,0,0,0], #Delta
+                         [0,1,0,0,0,0,0,0.1,0], #basal
+                         [0.005,0,0,0,0,0,0,0,0], #delta receptor
+                         [-10,0,0,0,0,0,0,0,0], #notch receptor
+                         [0,0,0,0,0,0,0,0,0], #ligand_delta
+                         [0,0,0,0,0,0,0,0,0], #ligand_notch
+                         [0,0,0,0,0,0,0,0,0], #ligand_basal
+                         [0,0,0,0,0,0,0,0,0] #divdie dummy
                         ])
 
 init_pop = generate_pop([(3, base1), (6, base2)])
@@ -34,8 +35,9 @@ class NumpyStopsTest(unittest.TestCase):
         super(NumpyStopsTest, self).__init__(*args, **kwargs)
 
     def test_each_step_with_constant_probs(self):
-        s2 = Stops2(trans_mat, init_pop, grid.adj_mat, bound, secretion,
-                   reception, receptors, secr_amount=6, leak=0, max_con=6, max_dist=1.5)
+        s2 = Stops2(trans_mat, init_pop, grid.adj_mat, range(9),
+               bound, secretion, reception, receptors, secr_amount=6, leak=0, max_con=6, opencl=True,
+               asym_id=-1, div_id=-1, die_id=-1)
         s2.__random = lambda x: numpy.zeros(x) + 0.5
 
 
@@ -77,24 +79,6 @@ class PartialKernelsTest(unittest.TestCase):
             prog2.get_random_vector(self.queue, (N, 1), None, res_buf, numpy.int32(bN), state_buf)
             cl.enqueue_copy(self.queue, res, res_buf)
             # Just running
-
-    def test_random_random(self):
-        with open("random_random.c") as f:
-            r_kernel = f.read()
-            r_kernel += """
-                __kernel void test_kern(__global float* data)
-                {
-                    random_random(data);
-                }
-            """
-            N = 100
-            rnd = numpy.random.random(N).astype(numpy.float32)
-            rand_buf = cl.Buffer(self.ctx, self.mf.READ_WRITE | self.mf.COPY_HOST_PTR, hostbuf=rnd)
-            prog = cl.Program(self.ctx, r_kernel).build()
-            prog.test_kern(self.queue, (N, 1), None, rand_buf)
-            rnd2 = numpy.zeros(N).astype(numpy.float32)
-            cl.enqueue_copy(self.queue, rnd2, rand_buf)
-            self.assertFalse(numpy.allclose(rnd, rnd2), "No new numbers generated")
 
 
 
