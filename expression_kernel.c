@@ -1,4 +1,4 @@
-#define ROW_SIZE %(row_size)d
+//#define ROW_SIZE %(row_size)d
 
 /*
 Kernel implementing picking of gene to express next
