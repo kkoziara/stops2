@@ -37,9 +37,8 @@ class NumpyStopsTest(unittest.TestCase):
     def test_each_step_with_constant_probs(self):
         s2 = Stops2(trans_mat, init_pop, grid.adj_mat, range(9),
                bound, secretion, reception, receptors, secr_amount=6, leak=0, max_con=6, opencl=True,
-               asym_id=-1, div_id=-1, die_id=-1)
+               asym_id=-1, div_id=-1, die_id=-1, diffusion_rate=1)
         s2.__random = lambda x: numpy.zeros(x) + 0.5
-
 
 class PartialKernelsTest(unittest.TestCase):
 

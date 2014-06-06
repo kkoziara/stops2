@@ -11,7 +11,7 @@ def mmap(fun, mat):
 
 class Stops2:
     def __init__(self, gene_mat, pop, mul_mat, env_map, bound=None, secretion=None, reception=None, receptors=None,
-                 init_env = None, secr_amount=1.0, leak=0.1, max_con = 1000.0,
+                 init_env = None, secr_amount=1.0, leak=0.1, max_con = 1000.0, diffusion_rate = 0.0,
                  asym=None, asym_id=-3, div_id=-2, die_id=-1, opencl = False):
         """
         Init of Stops
@@ -48,6 +48,8 @@ class Stops2:
         self.row_size = self.gene_mat.shape[0]
         self.pop_size = self.pop.shape[0]
         self.env_size = self.mul_mat.shape[0]
+
+        self.diffusion_rate = diffusion_rate
 
         if bound != None:
             self.bound = numpy.array(bound).astype(numpy.float32)
@@ -95,6 +97,14 @@ class Stops2:
         self.asym_id = asym_id
         self.div_id = div_id
         self.die_id = die_id
+
+        self.nbors = []
+        for i, row in enumerate(self.mul_mat):
+            i_nbors = []
+            for j, x in enumerate(row):
+                if x > 0:
+                    i_nbors.append((j, x))
+            self.nbors.append(i_nbors)
 
 
         self.opencl = opencl
@@ -199,6 +209,10 @@ class Stops2:
         # division/death done by host (no heavy computations there)
         self._divdie()
 
+        if self.diffusion_rate > 0:
+            self._diffusion() #done by the host (to be moved to the gpu)
+
+
     def _expression(self):
         # generate matrix of tokens simulating probability of particular actions taken by a cell
         # generate one random number for each cell
@@ -239,6 +253,28 @@ class Stops2:
         # leaking
         leak_fun = numpy.vectorize(lambda x : max(0.0, x - self.leak))
         self.env = leak_fun(self.env)
+
+    def _diffusion(self):
+        for j, lig in enumerate(self.env.T):
+            sum = 0.0
+            df_sum = 0.0
+            new_env = numpy.zeros(self.env.shape[0]).astype(numpy.float32)
+            for i, val in enumerate(lig):
+                # if i != j TODO
+                sum += val
+                wsum = 1.0
+                nval = val
+                for k, w in self.nbors[i]:
+                    w *= self.diffusion_rate
+                    wsum += w
+                    nval += lig[k] * w
+                nval /= wsum
+                df_sum += nval
+                new_env[i] = nval
+            if df_sum > 0:
+                self.env[:,j] = new_env * sum / df_sum
+
+
 
     def _reception(self):
         # reception
@@ -315,6 +351,8 @@ class Stops2:
         self._secretion()
         self._reception()
         self._divdie()
+        if self.diffusion_rate > 0:
+            self._diffusion()
 
     def sim(self, steps=100):
         for i in range(steps):
